@@ -1,6 +1,7 @@
 use numpy::PyReadonlyArray1;
 use pyo3::prelude::*;
 
+pub mod cache;
 pub mod flat;
 pub mod free;
 pub mod graph;
