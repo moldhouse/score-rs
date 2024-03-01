@@ -1,5 +1,4 @@
 use flat_projection::{FlatPoint, FlatProjection};
-use ord_subset::OrdSubsetIterExt;
 
 use crate::parallel::*;
 use crate::point::Point;
@@ -16,38 +15,75 @@ fn circ_mean(a: f32, b: f32) -> f32 {
 /// Projects all geographic points onto a flat surface for faster geodesic calculation
 ///
 pub fn to_flat_points<T: Point>(points: &[T]) -> Vec<FlatPoint<f32>> {
-    let center_lat = points.center_lat().unwrap();
-    let center_lon = points.center_lon().unwrap();
-    let proj = FlatProjection::new(center_lon, center_lat);
+    let center = points.center().unwrap();
+    let proj = FlatProjection::new(center.0, center.1);
 
     opt_par_iter(points)
         .map(|fix| proj.project(fix.longitude(), fix.latitude()))
         .collect()
 }
 
-trait CenterLatitude {
-    fn center_lat(&self) -> Option<f32>;
+struct BBox {
+    lon_min: f32,
+    lon_max: f32,
+    lat_min: f32,
+    lat_max: f32,
 }
 
-impl<T: Point> CenterLatitude for [T] {
-    fn center_lat(&self) -> Option<f32> {
-        let lat_min = self.iter().map(|fix| fix.latitude()).ord_subset_min()?;
-        let lat_max = self.iter().map(|fix| fix.latitude()).ord_subset_max()?;
+impl BBox {
+    fn extend<T: Point>(&mut self, point: &T) {
+        self.lon_min = self.lon_min.min(point.longitude());
+        self.lon_max = self.lon_max.max(point.longitude());
+        self.lat_min = self.lat_min.min(point.latitude());
+        self.lat_max = self.lat_max.max(point.latitude());
+    }
 
-        Some((lat_min + lat_max) / 2.)
+    fn center_lat(&self) -> f32 {
+        (self.lat_min + self.lat_max) / 2.
+    }
+    fn center_lon(&self) -> f32 {
+        circ_mean(self.lon_min, self.lon_max)
     }
 }
 
-trait CenterLongitude {
-    fn center_lon(&self) -> Option<f32>;
+impl<T: Point> From<&T> for BBox {
+    fn from(value: &T) -> Self {
+        BBox {
+            lon_min: value.longitude(),
+            lon_max: value.longitude(),
+            lat_min: value.latitude(),
+            lat_max: value.latitude(),
+        }
+    }
 }
 
-impl<T: Point> CenterLongitude for [T] {
-    fn center_lon(&self) -> Option<f32> {
-        let lon_min = self.iter().map(|fix| fix.longitude()).ord_subset_min()?;
-        let lon_max = self.iter().map(|fix| fix.longitude()).ord_subset_max()?;
+impl<T: Point> TryFrom<&[T]> for BBox {
+    type Error = &'static str;
+    fn try_from(value: &[T]) -> Result<Self, Self::Error> {
+        match value.first() {
+            None => Err("Empty array"),
+            Some(first) => {
+                let mut bbox = Self::from(first);
+                value.iter().skip(1).for_each(|point| bbox.extend(point));
+                Ok(bbox)
+            }
+        }
+    }
+}
 
-        Some(circ_mean(lon_min, lon_max))
+trait Center {
+    fn center(&self) -> Option<(f32, f32)>;
+}
+
+impl Center for BBox {
+    fn center(&self) -> Option<(f32, f32)> {
+        Some((self.center_lon(), self.center_lat()))
+    }
+}
+
+impl<T: Point> Center for [T] {
+    fn center(&self) -> Option<(f32, f32)> {
+        BBox::try_from(self).ok()?.center()
     }
 }
 
@@ -56,12 +92,12 @@ mod tests {
     use super::*;
     use assert_approx_eq::assert_approx_eq;
 
-    impl Point for (f32, f32) {
-        fn latitude(&self) -> f32 {
-            self.0
-        }
+    impl Point for (f64, f64) {
         fn longitude(&self) -> f32 {
-            self.1
+            self.0 as f32
+        }
+        fn latitude(&self) -> f32 {
+            self.1 as f32
         }
         fn altitude(&self) -> i16 {
             0
@@ -81,16 +117,45 @@ mod tests {
         assert_eq!(circ_mean(90., -180.), 135.);
     }
     #[test]
-    fn test_center() {
-        let points = vec![(50., 10.), (51., 11.), (52., 12.), (-5., -10.), (-5., 11.)];
+    fn test_bbox_from_point() {
+        let point = (10., 50.0);
+        let bbox = BBox::from(&point);
+        assert_eq!(bbox.lon_min, 10.);
+        assert_eq!(bbox.lon_max, 10.);
+        assert_eq!(bbox.lat_min, 50.);
+        assert_eq!(bbox.lat_max, 50.);
+    }
+    #[test]
+    fn test_bbox_from_points() {
+        let points: Vec<(f64, f64)> = vec![];
+        assert!(points.center().is_none());
 
-        assert_approx_eq!(points.center_lat().unwrap(), 23.5);
-        assert_approx_eq!(points.center_lon().unwrap(), 1.0);
+        let points = vec![(10., 50.0), (11., 51.), (12., 52.), (-10., -5.), (11., -5.)];
+
+        let bbox = BBox::try_from(&points[..]).unwrap();
+        assert_approx_eq!(bbox.lon_min, -10.);
+        assert_approx_eq!(bbox.lon_max, 12.);
+        assert_approx_eq!(bbox.lat_min, -5.);
+        assert_approx_eq!(bbox.lat_max, 52.);
+    }
+    #[test]
+    fn test_bbox_center() {
+        let bbox = BBox {
+            lon_min: -10.,
+            lon_max: 12.,
+            lat_min: -5.,
+            lat_max: 52.,
+        };
+
+        let center = bbox.center().unwrap();
+        assert_approx_eq!(center.0, 1.0);
+        assert_approx_eq!(center.1, 23.5);
     }
 
     #[test]
-    fn test_longitude_overflow() {
-        let points = vec![(50., 179.), (50., -179.)];
-        assert_approx_eq!(points.center_lon().unwrap(), 180.);
+    fn test_bbox_longitude_overflow() {
+        let points = vec![(179., 50.), (-179., 50.)];
+        let center = points.center().unwrap();
+        assert_approx_eq!(center.0, 180.);
     }
 }
