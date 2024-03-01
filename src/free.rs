@@ -1,13 +1,12 @@
 use flat_projection::FlatPoint;
-use ord_subset::OrdVar;
 use std::collections::HashSet;
 
 use crate::cache::{Cache, CacheItem};
 use crate::flat::to_flat_points;
-use crate::graph::{Graph, OptimizationResult};
+use crate::graph::Graph;
 use crate::parallel::*;
 use crate::point::Point;
-use crate::utils::Bound;
+use crate::result::{Bound, OptimizationResult};
 
 // Find the optimal set of (legs + 1) turnpoints, such that the sum of the inter turnpoints distances is maximized.
 // Break if no solution above break_at km an be found
@@ -23,18 +22,7 @@ pub fn optimize<T: Point>(route: &[T], break_at: f32, legs: usize) -> Option<Opt
         return Some(OptimizationResult::new(best_valid.path, route));
     }
 
-    let start_window = Bound {
-        start: start_candidates
-            .iter()
-            .map(|c| c.start_index)
-            .min()
-            .unwrap(),
-        stop: start_candidates
-            .iter()
-            .map(|c| c.start_index)
-            .max()
-            .unwrap(),
-    };
+    let start_window = Bound::from(start_candidates.as_ref());
     if let Some(improved) = best_valid.slide(route, &start_window, &flat_points, legs) {
         if improved.distance > best_valid.distance {
             best_valid = improved;
@@ -105,66 +93,8 @@ pub fn optimize<T: Point>(route: &[T], break_at: f32, legs: usize) -> Option<Opt
     Some(OptimizationResult::new(best_valid.path, route))
 }
 
-#[derive(Debug)]
-struct Slide {
-    start_index: usize,
-    stop_index: usize,
-    distance: f32,
-}
-
-impl OptimizationResult {
-    fn slide<T: Point>(
-        &self,
-        route: &[T],
-        start_window: &Bound,
-        flat_points: &[FlatPoint<f32>],
-        legs: usize,
-    ) -> Option<OptimizationResult> {
-        // Hold inner parts of path constant and adjust (wiggle) first and last to optimum
-        // The result is not optimal, but comes in many cases very close, so it is a good starting point
-        let slide = (start_window.start..start_window.stop.min(self.path[1]))
-            .filter_map(|start_index| {
-                (self.path[legs - 1]..route.len())
-                    .filter_map(|stop_index| {
-                        if route[start_index].altitude() - route[stop_index].altitude() <= 1000 {
-                            let distance = flat_points[start_index]
-                                .distance(&flat_points[self.path[1]])
-                                + flat_points[stop_index]
-                                    .distance(&flat_points[self.path[legs - 1]]);
-                            Some(Slide {
-                                start_index,
-                                stop_index,
-                                distance,
-                            })
-                        } else {
-                            None
-                        }
-                    })
-                    .max_by_key(|slide| OrdVar::new_checked(slide.distance))
-            })
-            .max_by_key(|slide| OrdVar::new_checked(slide.distance));
-        match slide {
-            Some(slide) => {
-                let mut new_path = self.path.clone();
-                new_path[0] = slide.start_index;
-                new_path[legs] = slide.stop_index;
-                let distance = new_path
-                    .iter()
-                    .zip(new_path.iter().skip(1))
-                    .map(|(i1, i2)| flat_points[*i1].distance(&flat_points[*i2]))
-                    .sum();
-                Some(OptimizationResult {
-                    path: new_path,
-                    distance,
-                })
-            }
-            None => None,
-        }
-    }
-}
-
+// Find the minimum index where the resulting path needs to end to achieve a better result than distance
 fn find_minimum_stop_index(dist_matrix: &[Vec<f32>], distance: f32) -> usize {
-    // Find the minimum index where the resulting path needs to end to achieve a better result than distance
     let mut i = 0;
     let mut sum = 0.0;
     loop {

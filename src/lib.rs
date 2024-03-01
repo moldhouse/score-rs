@@ -7,6 +7,7 @@ pub mod free;
 pub mod graph;
 pub mod parallel;
 pub mod point;
+pub mod result;
 pub mod utils;
 pub mod vincenty;
 
