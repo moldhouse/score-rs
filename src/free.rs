@@ -7,9 +7,6 @@ use crate::graph::{Graph, OptimizationResult, StartCandidate};
 use crate::parallel::*;
 use crate::point::Point;
 use crate::utils::Bound;
-use crate::vincenty::vincenty_distance;
-
-pub type Path = Vec<usize>;
 
 struct CacheItem {
     start: usize,
@@ -28,13 +25,8 @@ pub fn optimize<T: Point>(route: &[T], break_at: f32, legs: usize) -> Option<Opt
     let mut start_candidates = graph.get_start_candidates(best_valid.distance);
 
     if start_candidates.is_empty() {
-        let distance = calculate_distance(route, &best_valid.path);
-        return Some(OptimizationResult {
-            distance,
-            path: best_valid.path,
-        });
+        return Some(OptimizationResult::new(best_valid.path, route));
     }
-
     let start_window = Bound {
         start: start_candidates
             .iter()
@@ -119,11 +111,7 @@ pub fn optimize<T: Point>(route: &[T], break_at: f32, legs: usize) -> Option<Opt
         }
     }
 
-    let distance = calculate_distance(route, &best_valid.path);
-    Some(OptimizationResult {
-        distance,
-        path: best_valid.path,
-    })
+    Some(OptimizationResult::new(best_valid.path, route))
 }
 
 #[derive(Debug)]
@@ -249,15 +237,6 @@ pub fn half_dist_matrix(flat_points: &[FlatPoint<f32>]) -> Vec<Vec<f32>> {
         .enumerate()
         .map(|(i, p1)| flat_points[i..].iter().map(|p2| p1.distance(p2)).collect())
         .collect()
-}
-
-// Calculate the total distance of a solution
-fn calculate_distance<T: Point>(points: &[T], path: &Path) -> f32 {
-    path.iter()
-        .zip(path.iter().skip(1))
-        .map(|(i1, i2)| (&points[*i1], &points[*i2]))
-        .map(|(fix1, fix2)| vincenty_distance(fix1, fix2))
-        .sum()
 }
 
 #[cfg(test)]

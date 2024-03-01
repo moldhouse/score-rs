@@ -3,12 +3,29 @@ use ord_subset::OrdVar;
 use crate::parallel::*;
 use crate::point::Point;
 
+use crate::vincenty::vincenty_distance;
+
 pub type Path = Vec<usize>;
 
 #[derive(Debug)]
 pub struct OptimizationResult {
     pub path: Path,
     pub distance: f32,
+}
+
+fn calculate_distance<T: Point>(points: &[T], path: &Path) -> f32 {
+    path.iter()
+        .zip(path.iter().skip(1))
+        .map(|(i1, i2)| (&points[*i1], &points[*i2]))
+        .map(|(fix1, fix2)| vincenty_distance(fix1, fix2))
+        .sum()
+}
+
+impl OptimizationResult {
+    pub fn new<T: Point>(path: Path, points: &[T]) -> Self {
+        let distance = calculate_distance(points, &path);
+        OptimizationResult { path, distance }
+    }
 }
 
 #[derive(Debug)]
