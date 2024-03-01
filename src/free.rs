@@ -1,5 +1,4 @@
 use flat_projection::FlatPoint;
-use log::info;
 use ord_subset::OrdVar;
 use std::collections::HashSet;
 
@@ -19,34 +18,17 @@ struct CacheItem {
     distance: f32,
 }
 
+// Find the optimal set of (legs + 1) turnpoints, such that the sum of the inter turnpoints distances is maximized.
+// Break if no solution above break_at km an be found
 pub fn optimize<T: Point>(route: &[T], break_at: f32, legs: usize) -> Option<OptimizationResult> {
-    let mut iterations = 1;
     let flat_points = to_flat_points(route);
-
-    info!("Calculating distance matrix (finish -> start)");
     let dist_matrix = half_dist_matrix(&flat_points);
-
-    info!("Calculating solution graph");
     let graph = Graph::from_distance_matrix(&dist_matrix, legs);
     let mut best_valid = graph.find_best_valid_solution(route);
-
-    info!(
-        "-- New best solution: {:.3} km -> {:?}, {:?}",
-        calculate_distance(route, &best_valid.path),
-        best_valid.path,
-        best_valid.distance,
-    );
     let mut start_candidates = graph.get_start_candidates(best_valid.distance);
-    info!(
-        "{} potentially better start points found",
-        start_candidates.len()
-    );
 
-    // return early
     if start_candidates.is_empty() {
         let distance = calculate_distance(route, &best_valid.path);
-        info!("Solution: {:?} ({:.3} km)", best_valid.path, distance);
-        info!("{} iterations needed", iterations);
         return Some(OptimizationResult {
             distance,
             path: best_valid.path,
@@ -65,15 +47,9 @@ pub fn optimize<T: Point>(route: &[T], break_at: f32, legs: usize) -> Option<Opt
             .max()
             .unwrap(),
     };
-    info!("Slide window is : {:?}", start_window);
     if let Some(improved) = best_valid.slide(route, &start_window, &flat_points, legs) {
         if improved.distance > best_valid.distance {
             best_valid = improved;
-            info!(
-                "-- New improved best solution: {:.3} km -> {:?}",
-                calculate_distance(route, &best_valid.path),
-                best_valid.path
-            );
         }
     }
 
@@ -85,30 +61,15 @@ pub fn optimize<T: Point>(route: &[T], break_at: f32, legs: usize) -> Option<Opt
     {
         if improved.distance > best_valid.distance {
             best_valid = improved;
-            info!(
-                "-- New improved best solution: {:.3} km -> {:?}",
-                calculate_distance(route, &best_valid.path),
-                best_valid.path
-            );
         }
     }
 
     let minimum_stop_index = find_minimum_stop_index(&dist_matrix, best_valid.distance);
-    info!("Minimum stop index: {}", minimum_stop_index);
-
     let mut cache: Vec<CacheItem> = Vec::new();
 
     start_candidates.retain(|c| c.distance > best_valid.distance);
-    info!(
-        "{} potentially better start points left",
-        start_candidates.len()
-    );
 
     while let Some(candidate) = start_candidates.pop() {
-        info!(
-            "Checking candidate with start index: {}",
-            candidate.start_index
-        );
         let stops: Vec<usize> = candidate
             .get_valid_end_points(route)
             .into_iter()
@@ -133,7 +94,6 @@ pub fn optimize<T: Point>(route: &[T], break_at: f32, legs: usize) -> Option<Opt
                 distance,
             };
             cache.push(cache_item);
-            info!("Found item in cache, continuing");
             continue;
         }
 
@@ -141,13 +101,8 @@ pub fn optimize<T: Point>(route: &[T], break_at: f32, legs: usize) -> Option<Opt
         if candidate.distance < break_at {
             return Some(best_valid);
         }
-        iterations += 1;
         let finish_altitude = route[candidate.start_index].altitude();
 
-        info!(
-            "Calculating solution graph with start point at index {}",
-            candidate.start_index
-        );
         let candidate_graph = Graph::for_start_index(finish_altitude, &dist_matrix, route, legs);
         let best_valid_for_candidate = candidate_graph.find_best_valid_solution(route);
         let cache_item = CacheItem {
@@ -160,30 +115,11 @@ pub fn optimize<T: Point>(route: &[T], break_at: f32, legs: usize) -> Option<Opt
 
         if best_valid_for_candidate.distance > best_valid.distance {
             best_valid = best_valid_for_candidate;
-            info!(
-                "-- New best solution: {:.3} km -> {:?}",
-                calculate_distance(route, &best_valid.path),
-                best_valid.path
-            );
-
             start_candidates.retain(|it| it.distance > best_valid.distance);
-        } else {
-            info!(
-                "Discarding solution with {:.3} km -> {:?}",
-                calculate_distance(route, &best_valid_for_candidate.path),
-                &best_valid_for_candidate.path
-            );
         }
-        info!(
-            "{} potentially better start points left",
-            start_candidates.len()
-        );
     }
 
     let distance = calculate_distance(route, &best_valid.path);
-    info!("Solution: {:?} ({:.3} km)", best_valid.path, distance);
-
-    info!("{} iterations needed", iterations);
     Some(OptimizationResult {
         distance,
         path: best_valid.path,
@@ -238,7 +174,6 @@ impl OptimizationResult {
                     .zip(new_path.iter().skip(1))
                     .map(|(i1, i2)| flat_points[*i1].distance(&flat_points[*i2]))
                     .sum();
-                info!("New slide distance: {}", distance);
                 Some(OptimizationResult {
                     path: new_path,
                     distance,

@@ -1,4 +1,3 @@
-use log::trace;
 use ord_subset::OrdVar;
 
 use crate::parallel::*;
@@ -46,7 +45,12 @@ struct GraphCell {
     distance: f32,
 }
 
+// A layered graph with size [n_turnpoints, n_gps_points]
+//
+// Cell at [i, j]: If GPS point j is selected as turnpoint number i, what is the distance I can achieve via the previous i-1 turnpoints?
+// By selecting the maximum distance cell in the last layer, the graph can be iterated to find the best path.
 impl Graph {
+    // Return the remaining candidates that have the option of being better than the current best
     pub fn get_start_candidates(&self, current_best: f32) -> Vec<StartCandidate> {
         let mut candidates: Vec<_> = self
             .g
@@ -64,11 +68,9 @@ impl Graph {
         candidates
     }
 
+    // Build the graph without considering the 1000m rule
     pub fn from_distance_matrix(dist_matrix: &[Vec<f32>], legs: usize) -> Self {
         let mut graph: Vec<Vec<GraphCell>> = Vec::with_capacity(legs);
-
-        trace!("-- Analyzing leg #{}", 6);
-
         let layer: Vec<GraphCell> = opt_par_iter(dist_matrix)
             .enumerate()
             .map(|(tp_index, distances)| {
@@ -87,7 +89,6 @@ impl Graph {
         graph.push(layer);
 
         for layer_index in 1..legs {
-            trace!("-- Analyzing leg #{}", legs - layer_index);
             let last_layer = &graph[layer_index - 1];
 
             let layer: Vec<GraphCell> = opt_par_iter(dist_matrix)
@@ -115,9 +116,9 @@ impl Graph {
         Graph { g: graph }
     }
 
-    // build a layered graph for a fixed start point which can be traversed
-    // to find the best solution for the given start point
-    // penalize finish points that to not adhere to the 1000m altitude rule
+    // Build a layered graph for a fixed start point which can be traversed
+    // to find the best solution for the given start point.
+    // Penalize finish points that to not adhere to the 1000m altitude rule
     pub fn for_start_index<T: Point>(
         start_altitude: i16,
         dist_matrix: &[Vec<f32>],
@@ -125,12 +126,6 @@ impl Graph {
         legs: usize,
     ) -> Self {
         let mut graph: Vec<Vec<GraphCell>> = Vec::with_capacity(legs);
-
-        trace!("-- Analyzing leg #{}", 6);
-
-        // Only use finish points which are compliant to 1000m rule
-        //
-        // assuming X is the first turnpoint, what is the distance to `start_index`?
 
         let layer: Vec<GraphCell> = opt_par_iter(dist_matrix)
             .enumerate()
@@ -160,8 +155,6 @@ impl Graph {
         graph.push(layer);
 
         for layer_index in 1..legs {
-            trace!("-- Analyzing leg #{}", legs - layer_index);
-
             // layer: 1 / leg: 2
             //
             // assuming X is the second turnpoint, what is the first turnpoint
@@ -197,11 +190,15 @@ impl Graph {
         Graph { g: graph }
     }
 
-    // Finds the path in the graph which maximizes the distance between its elements.
+    // Iterate the graph to find the path which maximizes the distance between its elements.
     // Respect the 1000m altitude restriction.
+    //
+    // Note: This function does not guarantee optimality. For every endpoint, it will find the best path without
+    // the altitude constraint and disregard the ones that do not satisfy the constraint. This is not equivalent to
+    // finding the best path that satisfies the constraint for every endpoint.
+    // The result of this function can be used as a lower bound for a more complex optimization algorithm.
     pub fn find_best_valid_solution<T: Point>(&self, points: &[T]) -> OptimizationResult {
         let last_graph_row = self.g.last().unwrap();
-
         let offset = points.len() - last_graph_row.len();
 
         last_graph_row
@@ -225,23 +222,11 @@ impl Graph {
                 let finish = &points[finish_index];
                 let altitude_delta = start.altitude() - finish.altitude();
                 if altitude_delta <= 1000 {
-                    trace!(
-                        "Start: {} -> Finish: {}: {} km",
-                        start_index,
-                        finish_index,
-                        cell.distance
-                    );
                     Some(OptimizationResult {
                         distance: cell.distance,
                         path,
                     })
                 } else {
-                    trace!(
-                        "No: Start: {} -> Finish: {}: {} km",
-                        start_index,
-                        finish_index,
-                        cell.distance
-                    );
                     None
                 }
             })
@@ -249,11 +234,10 @@ impl Graph {
             .unwrap()
     }
 
-    // Finds the path in the graph which maximizes the distance between its elements.
-    // Do not respect the 1000m altitude restriction.
+    // Iterate the graph to find the path which maximizes the distance between its elements.
+    // Respect the 1000m altitude restriction.
     pub fn find_best_solution<T: Point>(&self, points: &[T]) -> OptimizationResult {
         let last_graph_row = self.g.last().unwrap();
-
         let offset = points.len() - last_graph_row.len();
 
         last_graph_row
