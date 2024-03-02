@@ -106,15 +106,15 @@ mod tests {
 
     #[test]
     fn test_circ_mean() {
-        assert_eq!(circ_mean(0., 0.), 0.);
-        assert_eq!(circ_mean(0., 90.0), 45.);
-        assert_eq!(circ_mean(0., 180.), -90.);
-        assert_eq!(circ_mean(0., -170.), -85.);
-        assert_eq!(circ_mean(0., 90.), 45.);
-        assert_eq!(circ_mean(0., -90.), -45.);
-        assert_eq!(circ_mean(-170., 178.), -176.);
-        assert_eq!(circ_mean(-178., 170.), 176.);
-        assert_eq!(circ_mean(90., -180.), 135.);
+        assert_approx_eq!(circ_mean(0., 0.), 0., 1e-5);
+        assert_approx_eq!(circ_mean(0., 90.0), 45., 1e-5);
+        assert_approx_eq!(circ_mean(0., 180.), -90., 1e-5);
+        assert_approx_eq!(circ_mean(0., -170.), -85., 1e-5);
+        assert_approx_eq!(circ_mean(0., 90.), 45., 1e-5);
+        assert_approx_eq!(circ_mean(0., -90.), -45., 1e-5);
+        assert_approx_eq!(circ_mean(-170., 178.), -176., 1e-5);
+        assert_approx_eq!(circ_mean(-178., 170.), 176., 1e-5);
+        assert_approx_eq!(circ_mean(90., -180.), 135., 1e-5);
     }
     #[test]
     fn test_bbox_from_point() {
