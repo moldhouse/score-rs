@@ -40,17 +40,13 @@ pub fn optimize<T: Point>(route: &[T], break_at: f32, legs: usize) -> Option<Opt
         }
     }
 
-    let minimum_stop_index = find_minimum_stop_index(&dist_matrix, best_valid.distance);
+    let min_stop_idx = find_min_stop_idx(&dist_matrix, best_valid.distance);
     let mut cache = Cache::new();
 
     start_candidates.retain(|c| c.distance > best_valid.distance);
 
     while let Some(candidate) = start_candidates.pop() {
-        let stops: Vec<usize> = candidate
-            .get_valid_end_points(route)
-            .into_iter()
-            .filter(|x| x > &minimum_stop_index)
-            .collect();
+        let stops: Vec<usize> = candidate.get_valid_end_points(route, min_stop_idx);
         if stops.is_empty() {
             continue;
         }
@@ -93,8 +89,10 @@ pub fn optimize<T: Point>(route: &[T], break_at: f32, legs: usize) -> Option<Opt
     Some(OptimizationResult::new(best_valid.path, route))
 }
 
-// Find the minimum index where the resulting path needs to end to achieve a better result than distance
-fn find_minimum_stop_index(dist_matrix: &[Vec<f32>], distance: f32) -> usize {
+// Calculate the cumulative distance when going from fix to fix. This places an upper limit on the
+// distance achievable with n legs and is used to calculate a minimum index where a path needs to end
+// to have the possibility to achieve a better result than distance
+fn find_min_stop_idx(dist_matrix: &[Vec<f32>], distance: f32) -> usize {
     let mut i = 0;
     let mut sum = 0.0;
     loop {

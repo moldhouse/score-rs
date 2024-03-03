@@ -12,14 +12,16 @@ pub struct StartCandidate {
 }
 
 impl StartCandidate {
-    pub fn get_valid_end_points<T: Point>(&self, route: &[T]) -> Vec<usize> {
+    // Return all points that would be valid endpoints for a route with the StartCandidate
+    // Also filter out endpoitns that are below minimum_idx, as they can not beat the current best
+    pub fn get_valid_end_points<T: Point>(&self, route: &[T], minimum_idx: usize) -> Vec<usize> {
         let start_altitude = route[self.start_index].altitude();
         route
             .iter()
             .enumerate()
             .skip(self.start_index)
             .filter_map(|(index, cell)| {
-                if start_altitude - cell.altitude() <= 1000 {
+                if index > minimum_idx && start_altitude - cell.altitude() <= 1000 {
                     Some(index)
                 } else {
                     None
