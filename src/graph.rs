@@ -193,6 +193,8 @@ impl Graph {
     // the altitude constraint and disregard the ones that do not satisfy the constraint. This is not equivalent to
     // finding the best path that satisfies the constraint for every endpoint.
     // The result of this function can be used as a lower bound for a more complex optimization algorithm.
+    // 
+    // If the graph has been build using Graph::for_start_index, the result ensures optimality for the given start point.
     pub fn find_best_valid_solution<T: Point>(&self, points: &[T]) -> OptimizationResult {
         let last_graph_row = self.g.last().unwrap();
         let offset = points.len() - last_graph_row.len();
