@@ -46,35 +46,23 @@ pub fn optimize<T: Point>(route: &[T], break_at: f32, legs: usize) -> Option<Opt
     start_candidates.retain(|c| c.distance > best_valid.distance);
 
     while let Some(candidate) = start_candidates.pop() {
+        if candidate.distance < break_at {
+            return Some(best_valid);
+        }
         let stops: Vec<usize> = candidate.get_valid_end_points(route, min_stop_idx);
         if stops.is_empty() {
             continue;
         }
         let stop_set: HashSet<usize> = stops.iter().cloned().collect();
-        let (use_caching, distance) =
-            cache.check(&flat_points, &candidate, best_valid.distance, &stop_set);
-        if use_caching {
-            let cache_item = CacheItem {
-                start: candidate.start_index,
-                stops,
-                stop_set,
-                distance,
-            };
-            cache.set(cache_item);
+        if cache.check(&flat_points, &candidate, best_valid.distance, &stop_set) {
             continue;
         }
 
-        // We can not score above maximum anymore
-        if candidate.distance < break_at {
-            return Some(best_valid);
-        }
-        let finish_altitude = route[candidate.start_index].altitude();
-
-        let candidate_graph = Graph::for_start_index(finish_altitude, &dist_matrix, route, legs);
+        let candidate_graph = Graph::for_candidate(&candidate, &dist_matrix, route, legs);
         let best_valid_for_candidate = candidate_graph.find_best_valid_solution(route);
         let cache_item = CacheItem {
             start: candidate.start_index,
-            stops,
+            last_stop: *stops.last().unwrap(),
             stop_set,
             distance: best_valid_for_candidate.distance,
         };

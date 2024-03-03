@@ -115,12 +115,13 @@ impl Graph {
     // Build a layered graph for a fixed start point which can be traversed
     // to find the best solution for the given start point.
     // Penalize finish points that to not adhere to the 1000m altitude rule
-    pub fn for_start_index<T: Point>(
-        start_altitude: i16,
+    pub fn for_candidate<T: Point>(
+        candidate: &StartCandidate,
         dist_matrix: &[Vec<f32>],
         points: &[T],
         legs: usize,
     ) -> Self {
+        let start_altitude = points[candidate.start_index].altitude();
         let mut graph: Vec<Vec<GraphCell>> = Vec::with_capacity(legs);
 
         let layer: Vec<GraphCell> = opt_par_iter(dist_matrix)
@@ -193,7 +194,7 @@ impl Graph {
     // the altitude constraint and disregard the ones that do not satisfy the constraint. This is not equivalent to
     // finding the best path that satisfies the constraint for every endpoint.
     // The result of this function can be used as a lower bound for a more complex optimization algorithm.
-    // 
+    //
     // If the graph has been build using Graph::for_start_index, the result ensures optimality for the given start point.
     pub fn find_best_valid_solution<T: Point>(&self, points: &[T]) -> OptimizationResult {
         let last_graph_row = self.g.last().unwrap();
