@@ -1,3 +1,8 @@
+// Building the Graph from the distance matrix for each start point is computationally expensive.
+// The cache stores the results of previous graph build and tries to understand if any item in the
+// cache which is sufficiently similiar to the current candidate can be used to place an upper bound
+// on the maximum achievable distance with this candidate.
+
 use crate::graph::StartCandidate;
 use flat_projection::FlatPoint;
 use std::collections::HashSet;
