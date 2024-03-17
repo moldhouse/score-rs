@@ -35,15 +35,15 @@ pub struct Bound {
 impl From<&[StartCandidate]> for Bound {
     fn from(candidates: &[StartCandidate]) -> Self {
         Bound {
-            start: candidates.iter().map(|c| c.start_index).min().unwrap(),
-            stop: candidates.iter().map(|c| c.start_index).max().unwrap(),
+            start: candidates.iter().map(|c| c.start).min().unwrap(),
+            stop: candidates.iter().map(|c| c.start).max().unwrap(),
         }
     }
 }
 
 #[derive(Debug)]
 struct Slide {
-    start_index: usize,
+    start: usize,
     stop_index: usize,
     distance: f32,
 }
@@ -59,16 +59,15 @@ impl OptimizationResult {
         legs: usize,
     ) -> Option<OptimizationResult> {
         let slide = (start_window.start..start_window.stop.min(self.path[1]))
-            .filter_map(|start_index| {
+            .filter_map(|start| {
                 (self.path[legs - 1]..route.len())
                     .filter_map(|stop_index| {
-                        if route[start_index].altitude() - route[stop_index].altitude() <= 1000 {
-                            let distance = flat_points[start_index]
-                                .distance(&flat_points[self.path[1]])
+                        if route[start].altitude() - route[stop_index].altitude() <= 1000 {
+                            let distance = flat_points[start].distance(&flat_points[self.path[1]])
                                 + flat_points[stop_index]
                                     .distance(&flat_points[self.path[legs - 1]]);
                             Some(Slide {
-                                start_index,
+                                start,
                                 stop_index,
                                 distance,
                             })
@@ -82,7 +81,7 @@ impl OptimizationResult {
         match slide {
             Some(slide) => {
                 let mut new_path = self.path.clone();
-                new_path[0] = slide.start_index;
+                new_path[0] = slide.start;
                 new_path[legs] = slide.stop_index;
                 let distance = new_path
                     .iter()

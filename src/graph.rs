@@ -2,31 +2,33 @@ use ord_subset::OrdVar;
 
 use crate::parallel::*;
 use crate::point::Point;
+use std::collections::HashSet;
 
 use crate::result::OptimizationResult;
 
 #[derive(Debug)]
 pub struct StartCandidate {
     pub distance: f32,
-    pub start_index: usize,
+    pub start: usize,
 }
 
 impl StartCandidate {
+    pub fn new(distance: f32, start: usize) -> Self {
+        StartCandidate { distance, start }
+    }
+
     // Return all points that would be valid endpoints for a route with the StartCandidate
-    // Also filter out endpoitns that are below minimum_idx, as they can not beat the current best
-    pub fn get_valid_end_points<T: Point>(&self, route: &[T], minimum_idx: usize) -> Vec<usize> {
-        let start_altitude = route[self.start_index].altitude();
+    // Also filter out endpoints that are below minimum_stop, as they can not beat the current best
+    pub fn get_valid_stops<T: Point>(&self, route: &[T], minimum_stop: usize) -> HashSet<usize> {
+        let start_altitude = route[self.start].altitude();
         route
             .iter()
             .enumerate()
-            .skip(self.start_index)
-            .filter_map(|(index, cell)| {
-                if index > minimum_idx && start_altitude - cell.altitude() <= 1000 {
-                    Some(index)
-                } else {
-                    None
-                }
+            .skip(self.start)
+            .filter(|(index, cell)| {
+                *index > minimum_stop && start_altitude - cell.altitude() <= 1000
             })
+            .map(|(index, _)| index)
             .collect()
     }
 }
@@ -55,10 +57,7 @@ impl Graph {
             .iter()
             .enumerate()
             .filter(|(_, cell)| cell.distance > current_best)
-            .map(|(start_index, cell)| StartCandidate {
-                distance: cell.distance,
-                start_index,
-            })
+            .map(|(start, cell)| StartCandidate::new(cell.distance, start))
             .collect();
         candidates.sort_by_key(|it| OrdVar::new_checked(it.distance));
         candidates
@@ -73,8 +72,8 @@ impl Graph {
                 distances
                     .iter()
                     .enumerate()
-                    .map(|(start_index, &distance)| GraphCell {
-                        prev_index: start_index + tp_index,
+                    .map(|(start, &distance)| GraphCell {
+                        prev_index: start + tp_index,
                         distance,
                     })
                     .max_by_key(|cell| OrdVar::new_checked(cell.distance))
@@ -121,7 +120,7 @@ impl Graph {
         points: &[T],
         legs: usize,
     ) -> Self {
-        let start_altitude = points[candidate.start_index].altitude();
+        let start_altitude = points[candidate.start].altitude();
         let mut graph: Vec<Vec<GraphCell>> = Vec::with_capacity(legs);
 
         let layer: Vec<GraphCell> = opt_par_iter(dist_matrix)
@@ -195,7 +194,7 @@ impl Graph {
     // finding the best path that satisfies the constraint for every endpoint.
     // The result of this function can be used as a lower bound for a more complex optimization algorithm.
     //
-    // If the graph has been build using Graph::for_start_index, the result ensures optimality for the given start point.
+    // If the graph has been build using Graph::for_start, the result ensures optimality for the given start point.
     pub fn find_best_valid_solution<T: Point>(&self, points: &[T]) -> OptimizationResult {
         let last_graph_row = self.g.last().unwrap();
         let offset = points.len() - last_graph_row.len();
@@ -215,9 +214,9 @@ impl Graph {
                     path.reverse();
                 }
 
-                let start_index = *path.first().unwrap();
+                let start = *path.first().unwrap();
                 let finish_index = *path.last().unwrap();
-                let start = &points[start_index];
+                let start = &points[start];
                 let finish = &points[finish_index];
                 let altitude_delta = start.altitude() - finish.altitude();
                 if altitude_delta <= 1000 {

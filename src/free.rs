@@ -1,5 +1,4 @@
 use flat_projection::FlatPoint;
-use std::collections::HashSet;
 
 use crate::cache::{Cache, CacheItem};
 use crate::flat::to_flat_points;
@@ -40,7 +39,7 @@ pub fn optimize<T: Point>(route: &[T], break_at: f32, legs: usize) -> Option<Opt
         }
     }
 
-    let min_stop_idx = find_min_stop_idx(&dist_matrix, best_valid.distance);
+    let minimum_stop = find_minimum_stop(&dist_matrix, best_valid.distance);
     let mut cache = Cache::new();
 
     start_candidates.retain(|c| c.distance > best_valid.distance);
@@ -49,24 +48,27 @@ pub fn optimize<T: Point>(route: &[T], break_at: f32, legs: usize) -> Option<Opt
         if candidate.distance < break_at {
             return Some(best_valid);
         }
-        let stops: Vec<usize> = candidate.get_valid_end_points(route, min_stop_idx);
+        let stops = candidate.get_valid_stops(route, minimum_stop);
         if stops.is_empty() {
             continue;
         }
-        let stop_set: HashSet<usize> = stops.iter().cloned().collect();
-        if cache.check(&flat_points, &candidate, best_valid.distance, &stop_set) {
+        let mut to_check = CacheItem::from_candidate(&candidate, stops);
+        if cache.check(&mut to_check, &flat_points, best_valid.distance) {
+            // there is no need to add this to the cache, because the relation is transitive
+            // if A provides an upperbound for B, and B provides an upperbound for a later C
+            // then A provides an upperbound for C, so we don't need to add B to the cache
+            //
+            // BUT: adding this to the cache provides a speed-up on the test suite
+            cache.set(to_check);
             continue;
         }
 
+        // do the full (expensive) optimization
         let candidate_graph = Graph::for_candidate(&candidate, &dist_matrix, route, legs);
         let best_valid_for_candidate = candidate_graph.find_best_valid_solution(route);
-        let cache_item = CacheItem {
-            start: candidate.start_index,
-            last_stop: *stops.last().unwrap(),
-            stop_set,
-            distance: best_valid_for_candidate.distance,
-        };
-        cache.set(cache_item);
+
+        to_check.distance = best_valid_for_candidate.distance;
+        cache.set(to_check);
 
         if best_valid_for_candidate.distance > best_valid.distance {
             best_valid = best_valid_for_candidate;
@@ -80,7 +82,7 @@ pub fn optimize<T: Point>(route: &[T], break_at: f32, legs: usize) -> Option<Opt
 // Calculate the cumulative distance when going from fix to fix. This places an upper limit on the
 // distance achievable with n legs and is used to calculate a minimum index where a path needs to end
 // to have the possibility to achieve a better result than distance
-fn find_min_stop_idx(dist_matrix: &[Vec<f32>], distance: f32) -> usize {
+fn find_minimum_stop(dist_matrix: &[Vec<f32>], distance: f32) -> usize {
     let mut i = 0;
     let mut sum = 0.0;
     loop {
