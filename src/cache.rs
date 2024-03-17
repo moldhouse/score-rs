@@ -3,7 +3,7 @@ use flat_projection::FlatPoint;
 use std::collections::HashSet;
 
 pub struct Cache {
-    cache: Vec<CacheItem>,
+    items: Vec<CacheItem>,
 }
 
 pub struct CacheItem {
@@ -17,10 +17,10 @@ pub struct CacheItem {
 // candidates) if a candidate can lead to a better result than the current best distances
 impl Cache {
     pub fn new() -> Cache {
-        Cache { cache: Vec::new() }
+        Cache { items: Vec::new() }
     }
     pub fn set(&mut self, item: CacheItem) {
-        self.cache.push(item);
+        self.items.push(item);
     }
 
     // If the current stop set is a super set of the stops of an item in the cache,
@@ -40,7 +40,7 @@ impl Cache {
         stop_set: &HashSet<usize>,
     ) -> bool {
         // iterate in reverse order as it proved to be more likely to find a match sooner
-        for cache_item in self.cache.iter().rev() {
+        for cache_item in self.items.iter().rev() {
             let offset_start =
                 flat_points[cache_item.start].distance(&flat_points[candidate.start_index]);
             if cache_item.distance + offset_start >= best_distance {
@@ -101,7 +101,7 @@ mod tests {
         };
         cache.set(first_item);
         cache.set(second_item);
-        assert_eq!(cache.cache.get(1).map(|item| item.start), Some(1));
+        assert_eq!(cache.items.get(1).map(|item| item.start), Some(1));
     }
 
     #[test]
