@@ -1,7 +1,7 @@
 use ord_subset::OrdVar;
 
 use crate::parallel::*;
-use crate::point::Point;
+use crate::point::{Point, Valid};
 use std::collections::HashSet;
 
 use crate::result::OptimizationResult;
@@ -117,10 +117,9 @@ impl Graph {
     pub fn for_candidate<T: Point>(
         candidate: &StartCandidate,
         dist_matrix: &[Vec<f32>],
-        points: &[T],
+        route: &[T],
         legs: usize,
     ) -> Self {
-        let start_altitude = points[candidate.start].altitude();
         let mut graph: Vec<Vec<GraphCell>> = Vec::with_capacity(legs);
 
         let layer: Vec<GraphCell> = opt_par_iter(dist_matrix)
@@ -130,9 +129,7 @@ impl Graph {
                     .iter()
                     .enumerate()
                     .map(|(finish_index, &distance)| {
-                        let finish = &points[finish_index + tp_index];
-                        let altitude_delta = start_altitude - finish.altitude();
-                        if altitude_delta <= 1000 {
+                        if route.valid(candidate.start, finish_index + tp_index) {
                             GraphCell {
                                 prev_index: finish_index + tp_index,
                                 distance,
@@ -195,9 +192,9 @@ impl Graph {
     // The result of this function can be used as a lower bound for a more complex optimization algorithm.
     //
     // If the graph has been build using Graph::for_start, the result ensures optimality for the given start point.
-    pub fn find_best_valid_solution<T: Point>(&self, points: &[T]) -> OptimizationResult {
+    pub fn find_best_valid_solution<T: Point>(&self, route: &[T]) -> OptimizationResult {
         let last_graph_row = self.g.last().unwrap();
-        let offset = points.len() - last_graph_row.len();
+        let offset = route.len() - last_graph_row.len();
 
         last_graph_row
             .iter()
@@ -213,13 +210,7 @@ impl Graph {
                 if *path.first().unwrap() > *path.last().unwrap() {
                     path.reverse();
                 }
-
-                let start = *path.first().unwrap();
-                let finish_index = *path.last().unwrap();
-                let start = &points[start];
-                let finish = &points[finish_index];
-                let altitude_delta = start.altitude() - finish.altitude();
-                if altitude_delta <= 1000 {
+                if route.valid(path[0], path[path.len() - 1]) {
                     Some(OptimizationResult {
                         distance: cell.distance,
                         path,
@@ -234,9 +225,9 @@ impl Graph {
 
     // Iterate the graph to find the path which maximizes the distance between its elements.
     // Respect the 1000m altitude restriction.
-    pub fn find_best_solution<T: Point>(&self, points: &[T]) -> OptimizationResult {
+    pub fn find_best_solution<T: Point>(&self, route: &[T]) -> OptimizationResult {
         let last_graph_row = self.g.last().unwrap();
-        let offset = points.len() - last_graph_row.len();
+        let offset = route.len() - last_graph_row.len();
 
         last_graph_row
             .iter()

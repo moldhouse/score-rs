@@ -14,11 +14,11 @@ fn circ_mean(a: f32, b: f32) -> f32 {
 
 /// Projects all geographic points onto a flat surface for faster geodesic calculation
 ///
-pub fn to_flat_points<T: Point>(points: &[T]) -> Vec<FlatPoint<f32>> {
-    let center = points.center().unwrap();
+pub fn to_flat_points<T: Point>(route: &[T]) -> Vec<FlatPoint<f32>> {
+    let center = route.center().unwrap();
     let proj = FlatProjection::new(center.0, center.1);
 
-    opt_par_iter(points)
+    opt_par_iter(route)
         .map(|fix| proj.project(fix.longitude(), fix.latitude()))
         .collect()
 }

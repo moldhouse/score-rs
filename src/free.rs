@@ -22,18 +22,15 @@ pub fn optimize<T: Point>(route: &[T], break_at: f32, legs: usize) -> Option<Opt
     }
 
     let start_window = Bound::from(start_candidates.as_ref());
-    if let Some(improved) = best_valid.slide(route, &start_window, &flat_points, legs) {
+    if let Some(improved) = best_valid.slide(route, &flat_points, &start_window) {
         if improved.distance > best_valid.distance {
             best_valid = improved;
         }
     }
 
-    // try sliding over solution obtained without alt limit for edge cases
-    if let Some(improved) =
-        graph
-            .find_best_solution(route)
-            .slide(route, &start_window, &flat_points, legs)
-    {
+    // for edge cases, sliding over the best invalid solution produces a valid one
+    let best_invalid = graph.find_best_solution(route);
+    if let Some(improved) = best_invalid.slide(route, &flat_points, &start_window) {
         if improved.distance > best_valid.distance {
             best_valid = improved;
         }

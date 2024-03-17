@@ -4,6 +4,7 @@
 // on the maximum achievable distance with this candidate.
 
 use crate::graph::StartCandidate;
+use crate::point::ApproxDistance;
 use flat_projection::FlatPoint;
 use std::collections::HashSet;
 
@@ -43,7 +44,7 @@ impl CacheItem {
         flat_points: &[FlatPoint<f32>],
         best_distance: f32,
     ) -> bool {
-        let start_offset = flat_points[self.start].distance(&flat_points[candidate.start]);
+        let start_offset = flat_points.distance(self.start, candidate.start);
         candidate.distance = self.distance + start_offset;
         if candidate.distance >= best_distance {
             // this item does not provide an upper bound below best_distance
@@ -53,7 +54,7 @@ impl CacheItem {
             return false;
         }
         for to_check in candidate.stops.difference(&self.stops) {
-            let stop_offset = flat_points[self.max_stop].distance(&flat_points[*to_check]);
+            let stop_offset = flat_points.distance(self.max_stop, *to_check);
             let new_guess = stop_offset + start_offset + self.distance;
             candidate.distance = candidate.distance.max(new_guess);
             if candidate.distance > best_distance {

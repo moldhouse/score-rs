@@ -1,18 +1,8 @@
 use crate::graph::StartCandidate;
-use crate::point::Point;
-use crate::vincenty::vincenty_distance;
+use crate::point::{ApproxDistance, Path, Point, Valid, VincentyDistance};
 use flat_projection::FlatPoint;
 use ord_subset::OrdVar;
 
-pub type Path = Vec<usize>;
-
-fn calculate_distance<T: Point>(points: &[T], path: &Path) -> f32 {
-    path.iter()
-        .zip(path.iter().skip(1))
-        .map(|(i1, i2)| (&points[*i1], &points[*i2]))
-        .map(|(fix1, fix2)| vincenty_distance(fix1, fix2))
-        .sum()
-}
 #[derive(Debug)]
 pub struct OptimizationResult {
     pub path: Path,
@@ -20,8 +10,8 @@ pub struct OptimizationResult {
 }
 
 impl OptimizationResult {
-    pub fn new<T: Point>(path: Path, points: &[T]) -> Self {
-        let distance = calculate_distance(points, &path);
+    pub fn new<T: Point>(path: Path, route: &[T]) -> Self {
+        let distance = route.cum_distance(&path);
         OptimizationResult { path, distance }
     }
 }
@@ -44,7 +34,7 @@ impl From<&[StartCandidate]> for Bound {
 #[derive(Debug)]
 struct Slide {
     start: usize,
-    stop_index: usize,
+    stop: usize,
     distance: f32,
 }
 
@@ -54,22 +44,24 @@ impl OptimizationResult {
     pub fn slide<T: Point>(
         &self,
         route: &[T],
-        start_window: &Bound,
         flat_points: &[FlatPoint<f32>],
-        legs: usize,
+        start_window: &Bound,
     ) -> Option<OptimizationResult> {
-        let slide = (start_window.start..start_window.stop.min(self.path[1]))
+        let second = self.path[1];
+        let penultimate = self.path[self.path.len() - 2];
+
+        let slide = (start_window.start..start_window.stop.min(second))
             .filter_map(|start| {
-                (self.path[legs - 1]..route.len())
-                    .filter_map(|stop_index| {
-                        if route[start].altitude() - route[stop_index].altitude() <= 1000 {
-                            let distance = flat_points[start].distance(&flat_points[self.path[1]])
-                                + flat_points[stop_index]
-                                    .distance(&flat_points[self.path[legs - 1]]);
+                (penultimate..route.len())
+                    .filter_map(|stop| {
+                        if route.valid(start, stop) {
+                            // all the other legs stay constant, so we can ignore them to find the max
+                            let first_leg = flat_points.distance(start, second);
+                            let last_leg = flat_points.distance(stop, penultimate);
                             Some(Slide {
                                 start,
-                                stop_index,
-                                distance,
+                                stop,
+                                distance: first_leg + last_leg,
                             })
                         } else {
                             None
@@ -78,20 +70,14 @@ impl OptimizationResult {
                     .max_by_key(|slide| OrdVar::new_checked(slide.distance))
             })
             .max_by_key(|slide| OrdVar::new_checked(slide.distance));
+
         match slide {
             Some(slide) => {
-                let mut new_path = self.path.clone();
-                new_path[0] = slide.start;
-                new_path[legs] = slide.stop_index;
-                let distance = new_path
-                    .iter()
-                    .zip(new_path.iter().skip(1))
-                    .map(|(i1, i2)| flat_points[*i1].distance(&flat_points[*i2]))
-                    .sum();
-                Some(OptimizationResult {
-                    path: new_path,
-                    distance,
-                })
+                let mut path = self.path.clone();
+                path[0] = slide.start;
+                path[self.path.len() - 1] = slide.stop;
+                let distance = flat_points.cum_distance(&path);
+                Some(OptimizationResult { path, distance })
             }
             None => None,
         }
