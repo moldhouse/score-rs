@@ -105,7 +105,7 @@ mod tests {
     }
 
     #[test]
-    fn test_circ_mean() {
+    fn circ_mean_works_on_zero_degree_crossing() {
         assert_approx_eq!(circ_mean(0., 0.), 0., 1e-5);
         assert_approx_eq!(circ_mean(0., 90.0), 45., 1e-5);
         assert_approx_eq!(circ_mean(0., 180.), -90., 1e-5);
@@ -117,7 +117,7 @@ mod tests {
         assert_approx_eq!(circ_mean(90., -180.), 135., 1e-5);
     }
     #[test]
-    fn test_bbox_from_point() {
+    fn bbox_is_equal_to_point() {
         let point = (10., 50.0);
         let bbox = BBox::from(&point);
         assert_eq!(bbox.lon_min, 10.);
@@ -126,7 +126,7 @@ mod tests {
         assert_eq!(bbox.lat_max, 50.);
     }
     #[test]
-    fn test_bbox_from_points() {
+    fn bbox_contains_all_points() {
         let points: Vec<(f64, f64)> = vec![];
         assert!(points.center().is_none());
 
@@ -139,7 +139,7 @@ mod tests {
         assert_approx_eq!(bbox.lat_max, 52.);
     }
     #[test]
-    fn test_bbox_center() {
+    fn bbox_center() {
         let bbox = BBox {
             lon_min: -10.,
             lon_max: 12.,
@@ -153,7 +153,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bbox_longitude_overflow() {
+    fn bbox_longitude_does_not_overflow() {
         let points = vec![(179., 50.), (-179., 50.)];
         let center = points.center().unwrap();
         assert_approx_eq!(center.0, 180.);

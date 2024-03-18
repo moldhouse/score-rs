@@ -100,7 +100,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_item_with_super_set_does_not_place_upperbound() {
+    fn item_with_super_set_does_not_place_upperbound() {
         let flat_points = vec![FlatPoint { x: 0.0, y: 0.0 }, FlatPoint { x: 1.0, y: 1.0 }];
         let mut candidate = CacheItem {
             start: 0,
@@ -123,7 +123,7 @@ mod tests {
     }
 
     #[test]
-    fn test_item_with_sub_set_places_upperbound() {
+    fn item_with_sub_set_places_upperbound() {
         let flat_points = vec![FlatPoint { x: 0.0, y: 0.0 }, FlatPoint { x: 1.0, y: 1.0 }];
         let mut candidate = CacheItem {
             start: 0,
@@ -145,7 +145,7 @@ mod tests {
     }
 
     #[test]
-    fn test_item_with_sub_set_but_bigger_distance() {
+    fn item_with_sub_set_but_bigger_distance() {
         let flat_points = vec![FlatPoint { x: 0.0, y: 0.0 }, FlatPoint { x: 1.0, y: 1.0 }];
         let mut candidate = CacheItem {
             start: 0,
@@ -167,7 +167,7 @@ mod tests {
     }
 
     #[test]
-    fn test_set_preserves_order() {
+    fn set_preserves_order() {
         let mut cache = Cache::new();
         let first_item = CacheItem {
             start: 0,
@@ -187,7 +187,7 @@ mod tests {
     }
 
     #[test]
-    fn test_empty_cache_returns_false() {
+    fn empty_cache_returns_false() {
         let flat_points = vec![FlatPoint { x: 0.0, y: 0.0 }, FlatPoint { x: 1.0, y: 1.0 }];
         let mut candidate = CacheItem {
             start: 0,
@@ -201,7 +201,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cache_with_sub_set_item_returns_true() {
+    fn cache_with_sub_set_item_returns_true() {
         let flat_points = vec![FlatPoint { x: 0.0, y: 0.0 }, FlatPoint { x: 1.0, y: 1.0 }];
         let mut candidate = CacheItem {
             start: 0,
