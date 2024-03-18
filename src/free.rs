@@ -22,7 +22,7 @@ pub fn optimize<T: Point>(route: &[T], break_at: f32, legs: usize) -> Option<Opt
     }
 
     let start_window = Bound::from(start_candidates.as_ref());
-    if let Some(improved) = best_valid.slide(route, &flat_points, &start_window) {
+    if let Some(improved) = best_valid.optimize_by_sliding(route, &flat_points, &start_window) {
         if improved.distance > best_valid.distance {
             best_valid = improved;
         }
@@ -30,7 +30,7 @@ pub fn optimize<T: Point>(route: &[T], break_at: f32, legs: usize) -> Option<Opt
 
     // for edge cases, sliding over the best invalid solution produces a valid one
     let best_invalid = graph.find_best_solution(route);
-    if let Some(improved) = best_invalid.slide(route, &flat_points, &start_window) {
+    if let Some(improved) = best_invalid.optimize_by_sliding(route, &flat_points, &start_window) {
         if improved.distance > best_valid.distance {
             best_valid = improved;
         }
